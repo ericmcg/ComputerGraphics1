@@ -51,18 +51,67 @@ bool checkCollision(float, float);
 #define TEXTURE_EXPLOSION   4
 
 
-#define SPEED_STEP_INCREASE 1
+#define SPEED_STEP_INCREASE .075
 #define SPEED_STEP_DECREASE SPEED_STEP_INCREASE
 #define TARGET_FPS 60
 #define PI 3.14159
 
 #define MAX_SPEED 3
+#define BULLET_SPEED MAX_SPEED
+#define KILL_ME -1
+
 
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
+int win_w = 400;
+int win_h = 500;
+
 
 //----------------------------------------------------------------------------
+
+
+class Bullet
+{
+public:
+  float x,y;
+  int theta;
+  float speed;
+  int update();
+  void draw();
+  Bullet(int start_x, int start_y, int start_theta);
+};
+
+Bullet::Bullet(int start_x, int start_y, int start_theta)
+{
+  x = start_x; 
+  y = start_y;
+  speed = BULLET_SPEED;
+  theta = start_theta;
+
+}
+
+int Bullet::update()
+{
+
+  //update position
+  x -= sin(theta*PI/180) * speed;
+  y += cos(theta*PI/180) * speed;
+  //collision detection
+
+  if (x < 0 or x > win_w or y < 0 or y > win_h)
+  	return KILL_ME;
+}
+
+
+void Bullet::draw()
+{
+  glPointSize(5.0f);
+  glBegin(GL_POINTS);
+  glVertex3f(x, y, 0);
+  glEnd();
+}
+
 
 class Ship 
 {
@@ -71,26 +120,26 @@ public:
   int state;                             // alive or exploding (regenerates after death)
   float x, y;                            // position
   int theta;                           //angle of the sh
-  int speed;				 //current speed
+  float speed;				 //current speed
 
   float w, h;                            // dimensions
 
-  bool turn_left, turn_right, boost;        // state of user key input 
+  bool turn_left, turn_right, boost,shoot;        // state of user key input 
 
   Ship();
   void update();
   void draw();
-  void draw_shot();
-
+  
 };
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
-int win_w = 400;
-int win_h = 500;
+
 
 //Asteroids **asteroids;    // array of asteroids
+Bullet *bullet = NULL; //current bullet
+
 Ship *ship;           // user-controllable ship
 
 char *score_string;   // level, lives, score go here
@@ -117,13 +166,21 @@ Ship::Ship()
   theta = 0;
   speed = 0;
 
-  turn_left = turn_right = boost= false;
+  turn_left = turn_right = boost = shoot = false;
 }
 
 //----------------------------------------------------------------------------
 
 void Ship::update()
 {
+
+
+  if (shoot == true)
+  {  
+    //spawn a bullet
+    bullet = new Bullet(x,y,theta);
+    shoot = false;
+  }
   // user input
 
   if (turn_left)
@@ -133,16 +190,16 @@ void Ship::update()
 
 
   
-  
+  //see if we should increase the speed of the plane
   if (boost)
   {
-    printf("The speed is: %d" , speed);
     speed += SPEED_STEP_INCREASE;
 
     if (speed > MAX_SPEED)
        speed = MAX_SPEED;
   }
 
+  //slow the plane down
   else
   {
     speed -= SPEED_STEP_DECREASE;
@@ -151,6 +208,8 @@ void Ship::update()
     }
   }
 
+
+  //move the plane
   x -= sin(theta*PI/180) * speed;
   y += cos(theta*PI/180) * speed;
 
@@ -217,6 +276,7 @@ void draw_string(float x, float y, float char_width, char *text)
    
   glPushMatrix();
   glTranslatef(x, y, 0);
+  glPointSize(1.0f);  //this is important for the stroke on text!
   glScalef(char_width / 104.76, char_width / 104.76, 1);
   for (p = text; *p; p++)
     glutStrokeCharacter(GLUT_STROKE_MONO_ROMAN, *p);
@@ -278,6 +338,8 @@ void keyboardup(unsigned char key, int x, int y)
     ship->turn_right = false;
   else if (key == 'w')
     ship->boost = false;
+  else if (key == 'm' and bullet == NULL)
+    ship->shoot = true;
 }
 
 //----------------------------------------------------------------------------
@@ -309,6 +371,15 @@ void idle()
   // ship
   ship->update();
 
+  if (bullet != NULL)
+  {
+    if (bullet->update() == KILL_ME)
+    {
+       delete(bullet);
+       bullet = NULL;
+    }
+    
+  }
   glutPostRedisplay();
 
   //  glutTimerFunc(msDelay, idle, 0);
@@ -338,7 +409,8 @@ void display()
   // ship
   
   ship->draw();
-				
+  if (bullet != NULL)				
+    bullet->draw();
   // sample text
   
   sprintf(score_string, "Level %i   Ships lost %i", 0, 11);
